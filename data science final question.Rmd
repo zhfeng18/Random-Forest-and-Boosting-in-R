@@ -1,0 +1,287 @@
+---
+title: "Final Question"
+author: "Huafeng Zhang (217107707)"
+date: "2019.7.26"
+output: 
+  pdf_document: default
+---
+
+## 1. load data, remove na, log-transform
+```{r step1}
+library(ISLR)
+hit <- Hitters #322 obs
+hit <- na.omit(hit) #263 obs
+hit$log.Salary <- log(hit$Salary)
+#names(hit)
+```
+
+## 2. split to train/test
+```{r step2}
+tr.hit <- hit[1:200,]
+te.hit <- hit[201:263,]
+```
+
+## 3. Random Forest
+```{r step3}
+library(randomForest)
+set.seed(345)
+
+#25 trees
+rf25 <- randomForest(log.Salary ~ . - Salary, data = tr.hit, ntree = 25, Importance = T)
+ps25 <- predict(rf25, newdata = te.hit)
+mse25 <- mean((te.hit$log.Salary-ps25)^2)
+
+#100 trees
+#rf100 <- grow(rf25, 75)
+rf100 <- randomForest(log.Salary ~ . - Salary, data = tr.hit, ntree = 100, Importance = T)
+ps100 <- predict(rf100, newdata = te.hit)
+mse100 <- mean((te.hit$log.Salary-ps100)^2)
+
+#500 trees
+#rf500 <- grow(rf100, 400)
+rf500 <- randomForest(log.Salary ~ . - Salary, data = tr.hit, ntree = 500, Importance = T)
+ps500 <- predict(rf500, newdata = te.hit)
+mse500 <- mean((te.hit$log.Salary-ps500)^2)
+
+#1000 trees
+#rf1000 <- grow(rf500, 500)
+rf1000 <- randomForest(log.Salary ~ . - Salary, data = tr.hit, ntree = 1000, Importance = T)
+ps1000 <- predict(rf1000, newdata = te.hit)
+mse1000 <- mean((te.hit$log.Salary-ps1000)^2)
+
+print(paste('MSE of 25 trees is', mse25))
+print(paste('MSE of 100 trees is', mse100))
+print(paste('MSE of 500 trees is', mse500))
+print(paste('MSE of 1000 trees is', mse1000))
+```
+###Given the 4 results, using 500 trees gives the best result with the smallest MSE of 0.216.\
+\
+
+## 4. identify the most important variables
+```{r step4}
+print(rf500) #No. of variables tried at each split: 6
+importance(rf500, type=2)
+```
+### The most important variables (with the largest values) associated with predicting Salary are 'CAtBat', 'CHits', 'CRuns', 'CWalks', and 'CRBI'.\
+\
+
+## 5. Boosting and plot of learning rates vs. train MSEs
+```{r step5}
+library(gbm)
+set.seed(567)
+
+#0.01 learning rate
+b01 <- gbm(formula = log.Salary ~ . - Salary, data = tr.hit,
+           distribution = "gaussian", n.trees = 1000,
+           interaction.depth = 1, shrinkage = 0.01, verbose = F)
+trps01 <- predict(b01, n.trees = b01$n.trees, newdata = tr.hit)
+trmse01 <- mean((tr.hit$log.Salary-trps01)^2)
+
+#0.001 learning rate
+b001 <- gbm(log.Salary ~ . - Salary, data = tr.hit,
+           distribution = "gaussian", n.trees = 1000,
+           interaction.depth = 1, shrinkage = 0.001, verbose = F)
+trps001 <- predict(b001, n.trees = b001$n.trees, newdata = tr.hit)
+trmse001 <- mean((tr.hit$log.Salary-trps001)^2)
+
+#0.1 learning rate
+b1 <- gbm(log.Salary ~ . - Salary, data = tr.hit,
+           distribution = "gaussian", n.trees = 1000,
+           interaction.depth = 1, shrinkage = 0.1, verbose = F)
+trps1 <- predict(b1, n.trees = b1$n.trees, newdata = tr.hit)
+trmse1 <- mean((tr.hit$log.Salary-trps1)^2)
+
+#0.2 learning rate
+b2 <- gbm(log.Salary ~ . - Salary, data = tr.hit,
+           distribution = "gaussian", n.trees = 1000,
+           interaction.depth = 1, shrinkage = 0.2, verbose = F)
+trps2 <- predict(b2, n.trees = b2$n.trees, newdata = tr.hit)
+trmse2 <- mean((tr.hit$log.Salary-trps2)^2)
+
+print(paste('train MSE of 0.01 learning rate at d=1 is', trmse01))
+print(paste('train MSE of 0.001 learning rate at d=1 is', trmse001))
+print(paste('train MSE of 0.1 learning rate at d=1 is', trmse1))
+print(paste('train MSE of 0.2 learning rate at d=1 is', trmse2))
+
+#plot (train)
+plot(c(0.001,0.01,0.1,0.2),
+     c(trmse001,trmse01,trmse1,trmse2),
+     type = 'l', col = 'coral3',
+     main = 'Learning Rate vs. Train MSE at d=1',
+     xlab = 'Learning Rate',
+     ylab = 'Train MSE')
+```
+
+## 6. plot of learning rates vs. test MSEs
+```{r step6}
+#interaction.depth = 1
+library(gbm)
+set.seed(567)
+
+#0.01 learning rate
+ps01 <- predict(b01, n.trees = b01$n.trees, newdata = te.hit)
+mse01 <- mean((te.hit$log.Salary-ps01)^2)
+
+#0.001 learning rate
+ps001 <- predict(b001, n.trees = b001$n.trees, newdata = te.hit)
+mse001 <- mean((te.hit$log.Salary-ps001)^2)
+
+#0.1 learning rate
+ps1 <- predict(b1, n.trees = b1$n.trees, newdata = te.hit)
+mse1 <- mean((te.hit$log.Salary-ps1)^2)
+
+#0.2 learning rate
+ps2 <- predict(b2, n.trees = b2$n.trees, newdata = te.hit)
+mse2 <- mean((te.hit$log.Salary-ps2)^2)
+
+print(paste('MSE of 0.01 learning rate at d=1 is', mse01))
+print(paste('MSE of 0.001 learning rate at d=1 is', mse001))
+print(paste('MSE of 0.1 learning rate at d=1 is', mse1))
+print(paste('MSE of 0.2 learning rate at d=1 is', mse2))
+
+#plot (test)
+plot(c(0.001,0.01,0.1,0.2),
+     c(mse001,mse01,mse1,mse2),
+     type = 'l', col = 'coral3',
+     main = 'Learning Rate vs. Test MSE at d=1',
+     xlab = 'Learning Rate',
+     ylab = 'Test MSE')
+```
+
+
+## 7. try different interaction depths
+```{r}
+#interaction.depth = 2
+set.seed(666)
+
+#0.01 learning rate
+b01 <- gbm(formula = log.Salary ~ . - Salary, data = tr.hit,
+           distribution = "gaussian", n.trees = 1000,
+           interaction.depth = 2, shrinkage = 0.01, verbose = F)
+ps01 <- predict(b01, n.trees = b01$n.trees, newdata = te.hit)
+mse01 <- mean((te.hit$log.Salary-ps01)^2)
+
+#0.001 learning rate
+b001 <- gbm(log.Salary ~ . - Salary, data = tr.hit,
+           distribution = "gaussian", n.trees = 1000,
+           interaction.depth = 2, shrinkage = 0.001, verbose = F)
+ps001 <- predict(b001, n.trees = b001$n.trees, newdata = te.hit)
+mse001 <- mean((te.hit$log.Salary-ps001)^2)
+
+#0.1 learning rate
+b1 <- gbm(log.Salary ~ . - Salary, data = tr.hit,
+           distribution = "gaussian", n.trees = 1000,
+           interaction.depth = 2, shrinkage = 0.1, verbose = F)
+ps1 <- predict(b1, n.trees = b1$n.trees, newdata = te.hit)
+mse1 <- mean((te.hit$log.Salary-ps1)^2)
+
+#0.2 learning rate
+b2 <- gbm(log.Salary ~ . - Salary, data = tr.hit,
+           distribution = "gaussian", n.trees = 1000,
+           interaction.depth = 2, shrinkage = 0.2, verbose = F)
+ps2 <- predict(b2, n.trees = b2$n.trees, newdata = te.hit)
+mse2 <- mean((te.hit$log.Salary-ps2)^2)
+
+print(paste('MSE of 0.01 learning rate at d=2 is', mse01))
+print(paste('MSE of 0.001 learning rate at d=2 is', mse001))
+print(paste('MSE of 0.1 learning rate at d=2 is', mse1))
+print(paste('MSE of 0.2 learning rate at d=2 is', mse2))
+
+#plot (test)
+plot(c(0.001,0.01,0.1,0.2),
+     c(mse001,mse01,mse1,mse2),
+     type = 'l', col = 'coral3',
+     main = 'Learning Rate vs. Test MSE at d=2',
+     xlab = 'Learning Rate',
+     ylab = 'Test MSE')
+```
+
+```{r}
+#interaction.depth = 4
+set.seed(233)
+
+#0.01 learning rate
+b01 <- gbm(formula = log.Salary ~ . - Salary, data = tr.hit,
+           distribution = "gaussian", n.trees = 1000,
+           interaction.depth = 4, shrinkage = 0.01, verbose = F)
+ps01 <- predict(b01, n.trees = b01$n.trees, newdata = te.hit)
+mse01 <- mean((te.hit$log.Salary-ps01)^2)
+
+#0.001 learning rate
+b001 <- gbm(log.Salary ~ . - Salary, data = tr.hit,
+           distribution = "gaussian", n.trees = 1000,
+           interaction.depth = 4, shrinkage = 0.001, verbose = F)
+ps001 <- predict(b001, n.trees = b001$n.trees, newdata = te.hit)
+mse001 <- mean((te.hit$log.Salary-ps001)^2)
+
+#0.1 learning rate
+b1 <- gbm(log.Salary ~ . - Salary, data = tr.hit,
+           distribution = "gaussian", n.trees = 1000,
+           interaction.depth = 4, shrinkage = 0.1, verbose = F)
+ps1 <- predict(b1, n.trees = b1$n.trees, newdata = te.hit)
+mse1 <- mean((te.hit$log.Salary-ps1)^2)
+
+#0.2 learning rate
+b2 <- gbm(log.Salary ~ . - Salary, data = tr.hit,
+           distribution = "gaussian", n.trees = 1000,
+           interaction.depth = 4, shrinkage = 0.2, verbose = F)
+ps2 <- predict(b2, n.trees = b2$n.trees, newdata = te.hit)
+mse2 <- mean((te.hit$log.Salary-ps2)^2)
+
+print(paste('MSE of 0.01 learning rate at d=4 is', mse01))
+print(paste('MSE of 0.001 learning rate at d=4 is', mse001))
+print(paste('MSE of 0.1 learning rate at d=4 is', mse1))
+print(paste('MSE of 0.2 learning rate at d=4 is', mse2))
+
+#plot (test)
+plot(c(0.001,0.01,0.1,0.2),
+     c(mse001,mse01,mse1,mse2),
+     type = 'l', col = 'coral3',
+     main = 'Learning Rate vs. Test MSE at d=4',
+     xlab = 'Learning Rate',
+     ylab = 'Test MSE')
+```
+
+For interaction depth of 1, $\lambda=0.1$ gives the smallest test MSE of 0.253919209796006.\
+For interaction depth of 2, $\lambda=0.01$ gives the smallest test MSE of 0.276960632061591.\
+For interaction depth of 4, $\lambda=0.2$ gives the smallest test MSE of 0.263558950473661.\
+\
+
+
+## 8. most important variables from boosted tree
+```{r}
+set.seed(567) #the same seed as above for d=1
+b1 <- gbm(log.Salary ~ . - Salary, data = tr.hit,
+           distribution = "gaussian", n.trees = 1000,
+           interaction.depth = 1, shrinkage = 0.1, verbose = F)
+summary(b1)
+```
+### Given the result, 'CWalks', 'CAtBat', and 'CRBI' are the most important variables.\
+\
+
+
+## 9. compare test MSEs from RF and boosting
+### In random forest, using 500 trees gives the best result with the smallest MSE of 0.216, which is better than any of the test MSE from boosting.
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

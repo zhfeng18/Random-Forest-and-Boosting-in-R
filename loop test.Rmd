@@ -1,0 +1,173 @@
+---
+title: "Final Question"
+author: "Huafeng Zhang (217107707)"
+date: "2019.7.26"
+output: 
+  pdf_document: default
+---
+
+## 1. load data, remove na, log-transform
+```{r step1}
+library(ISLR)
+hit <- Hitters #322 obs
+hit <- na.omit(hit) #263 obs
+hit$Salary <- log(hit$Salary)
+#names(hit)
+```
+
+## 2. split to train/test
+```{r step2}
+tr.hit <- hit[1:200,]
+te.hit <- hit[201:nrow(hit),]
+```
+
+## 3. Random Forest
+```{r}
+library(randomForest)
+set.seed(345)
+
+ntree <- c(25,100,500,1000)
+tree.list <- list()
+
+for (i in ntree){
+  rf <- randomForest(Salary ~ ., data = tr.hit, ntree = i, importance = T)
+  rf.ps <- predict(rf, newdata = te.hit)
+  rf.mse <- mean((rf.ps-te.hit$Salary)^2)
+  print(paste('MSE of', i, 'trees is', rf.mse))
+  tree.list[[i]] <- rf
+}
+```
+Given the results, using 500 trees gives the best result with the smallest MSE of 0.215.\
+\
+
+
+## 4. identify the most important variables
+```{r step4}
+#use 500 trees stored from previous step
+importance(tree.list[[500]], type = 2)
+```
+The most important variables (with top 5 largest values) associated with predicting Salary (with 500 trees) are 'CAtBat', 'CHits', 'CRuns', 'CWalks', and 'CRBI'.\
+\
+
+
+## 5. Boosting and plot of learning rates vs. train MSEs
+```{r step5}
+library(gbm)
+
+lambda <- c(0.001,0.01,0.1,0.2)
+btrain.list <- list()
+
+for (i in lambda){
+  set.seed(5671)
+  boost <- gbm(formula = Salary ~ ., data = tr.hit,
+           distribution = "gaussian", n.trees = 1000,
+           interaction.depth = 1, shrinkage = i, verbose = F)
+  btr.ps <- predict(boost, n.trees = boost$n.trees, newdata = tr.hit)
+  btr.mse <- mean((btr.ps-tr.hit$Salary)^2)
+  print(paste('Train MSE of', i, 'learning rate at d=1 is', btr.mse))
+  btrain.list <- c(btrain.list, btr.mse)
+}
+
+plot(lambda, btrain.list,
+     type = 'b', pch=19, col = 'coral3',
+     main = 'Learning Rate vs. Train MSE at d=1',
+     xlab = 'Learning Rate',
+     ylab = 'Train MSE')
+```
+Given the results, using $\lambda=0.2$ gives the best result with the smallest train MSE of 0.02258 at $d=1$.\
+\
+
+
+## 6. plot of learning rates vs. test MSEs
+```{r}
+library(gbm)
+
+lambda <- c(0.001,0.01,0.1,0.2)
+btest.list1 <- list()
+
+for (i in lambda){
+  set.seed(5671)
+  #I put the 5671 seed here for the same boosted tree in Q8
+  #they have the same MSE (0.27557) as I tested
+  boost <- gbm(formula = Salary ~ ., data = tr.hit,
+           distribution = "gaussian", n.trees = 1000,
+           interaction.depth = 1, shrinkage = i, verbose = F)
+  bte.ps <- predict(boost, n.trees = boost$n.trees, newdata = te.hit)
+  bte.mse <- mean((bte.ps-te.hit$Salary)^2)
+  print(paste('Test MSE of', i, 'learning rate at d=1 is', bte.mse))
+  btest.list1 <- c(btest.list1, bte.mse)
+}
+
+plot(lambda, btest.list1,
+     type = 'b', pch=19, col = 'coral3',
+     main = 'Learning Rate vs. Test MSE at d=1',
+     xlab = 'Learning Rate',
+     ylab = 'Test MSE')
+```
+Given the results, using $\lambda=0.1$ gives the best result with the smallest test MSE of 0.27557 at $d=1$.\
+\
+
+
+## 7. try different interaction depths
+```{r}
+library(gbm)
+set.seed(8432)
+
+lambda <- c(0.001,0.01,0.1,0.2)
+depth <- c(2,4) #test d=2,4 since we already have d=1 from Q6
+
+for (i in depth){
+  test.list24 <- list()
+  for (j in lambda){
+    boost <- gbm(formula = Salary ~ ., data = tr.hit,
+           distribution = "gaussian", n.trees = 1000,
+           interaction.depth = i, shrinkage = j, verbose = F)
+    bte.ps <- predict(boost, n.trees = boost$n.trees, newdata = te.hit)
+    bte.mse <- mean((bte.ps-te.hit$Salary)^2)
+    print(paste('Test MSE of', j, 'learning rate at d=', i, 'is', bte.mse))
+    test.list24 <- c(test.list24, bte.mse)
+  }
+  plot(lambda, test.list24,
+       type = 'b', pch=19, col = 'coral3',
+       main = paste('Learning Rate vs. Test MSE at d=', i),
+       xlab = 'Learning Rate',
+       ylab = 'Test MSE')
+}
+```
+Given the results, using $\lambda=0.1$ gives the best result with the smallest MSE of 0.281 for $d=2$.\
+Given the results, using $\lambda=0.01$ gives the best result with the smallest MSE of 0.277 for $d=4$.\
+\
+
+
+## 8. most important variables from boosted tree
+```{r}
+#use the best result (smallest MSE) at lambda=0.01 and d=1
+set.seed(5671)
+b1 <- gbm(Salary ~ ., data = tr.hit,
+           distribution = "gaussian", n.trees = 1000,
+           interaction.depth = 1, shrinkage = 0.01, verbose = F)
+#the following steps for testing the same MSE (0.27557) as in Q6
+ps1 <- predict(b1, n.trees = b1$n.trees, newdata = te.hit)
+mse1 <- mean((ps1-te.hit$Salary)^2)
+print(paste('Test MSE of 0.01 learning rate at d=1 is', mse1))
+
+summary(b1)
+```
+Given the result, 'CAtBat', 'CHits', 'CWalks', 'CRBI', 'CRuns' are the most important (top 5) variables.\
+\
+
+
+## 9. compare test MSEs from RF and boosting
+In random forest, using 500 trees gives the best result with the smallest test MSE of 0.215, which is better than any of the test MSE from boosting.\
+The determinations of the most important variables gives the same top 5 variables from both methods, although the ranks are different.
+
+
+
+
+
+
+
+
+
+
+
